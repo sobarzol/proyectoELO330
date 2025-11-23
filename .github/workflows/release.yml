@@ -9,6 +9,9 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
+    # CORRECCIÓN: Exportar la output para que otros jobs la vean
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
     permissions:
       contents: write
     
@@ -38,9 +41,6 @@ jobs:
             
             ### Instalación
             Ver README.md para instrucciones de instalación.
-            
-            ### Cambios
-            Ver commits para detalles de cambios.
 
   build-binaries:
     name: Build Binaries
@@ -71,7 +71,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y protobuf-compiler portaudio19-dev
+          sudo apt-get install -y protobuf-compiler portaudio19-dev libprotobuf-dev
       
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -81,15 +81,17 @@ jobs:
       - name: Build Go Server
         run: |
           cd chat-server
-          go mod download
+          # "go mod tidy" arregla dependencias faltantes y actualiza go.sum
+          go mod tidy
           go build -o server-${{ matrix.platform }}-amd64 .
       
       - name: Build Go Client
         run: |
           cd go-client
-          go mod download
+          go mod tidy
           go build -o client-go-${{ matrix.platform }}-amd64 .
       
+      # Nota: Asegúrate de que tu Makefile en c-client genera un archivo llamado 'client'
       - name: Build C Client
         run: |
           cd c-client
