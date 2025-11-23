@@ -198,6 +198,20 @@ func (s *server) JoinChatRoom(stream pb.ChatService_JoinChatRoomServer) error {
 	}
 
 	c := &client{stream: stream, sender: msg.Sender, err: make(chan error)}
+	
+	// Enviar mensaje de confirmación al cliente
+	confirmMsg := &pb.ChatMessage{
+		Sender:    "Servidor",
+		Message:   fmt.Sprintf("Bienvenido a la sala '%s', %s", msg.RoomId, msg.Sender),
+		RoomId:    msg.RoomId,
+		Timestamp: time.Now().Unix(),
+		TraceId:   msg.TraceId,
+	}
+	if err := stream.Send(confirmMsg); err != nil {
+		log.Printf("Error al enviar confirmación: %v", err)
+		return err
+	}
+	
 	room.commands <- joinCommand{client: c}
 	go s.handleClientMessages(room, c)
 	return <-c.err
