@@ -10,7 +10,7 @@
 **/*.test
 **/*.out
 **/server
-**/client
+# **/client
 
 # Python
 **/__pycache__/
@@ -29,7 +29,7 @@
 **/*.o
 **/*.a
 **/*.so
-**/client
+# **/client
 **/server
 **/*.pb-c.c
 **/*.pb-c.h
@@ -65,3 +65,4 @@
 **/Descargas/
 **/Downloads/
 **/chat-downloads/
+javaclient/src/**

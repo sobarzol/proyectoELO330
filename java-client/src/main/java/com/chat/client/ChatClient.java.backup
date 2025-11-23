@@ -1,0 +1,215 @@
+package com.chat.client;
+
+import com.chat.grpc.ChatMessage;
+import com.chat.grpc.ChatServiceGrpc;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.stub.StreamObserver;
+
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Scanner;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+public class ChatClient {
+    private final ManagedChannel channel;
+    private final ChatServiceGrpc.ChatServiceStub asyncStub;
+    private String sender;
+    private String roomId;
+    private AudioStreamer audioStreamer;
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
+
+    public ChatClient(String host, int port) {
+        this.channel = ManagedChannelBuilder.forAddress(host, port)
+                .usePlaintext()
+                .build();
+        this.asyncStub = ChatServiceGrpc.newStub(channel);
+    }
+
+    // Helper para imprimir mensajes (sin redibujar el prompt)
+    private void printMessage(String message) {
+        String ansiClearLine = "\r\u001b[2K";
+        System.out.print(ansiClearLine + message + "\n");
+        System.out.flush();
+    }
+
+    public void shutdown() throws InterruptedException {
+        if (audioStreamer != null && audioStreamer.isGrpcStreamActive()) {
+            audioStreamer.stopAudioConnection();
+        }
+        channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+    }
+
+    public void joinChatRoom(String sender, String roomId) throws InterruptedException {
+        this.sender = sender;
+        this.roomId = roomId;
+        this.audioStreamer = new AudioStreamer(asyncStub, sender, roomId);
+
+        final CountDownLatch finishLatch = new CountDownLatch(1);
+
+        StreamObserver<ChatMessage> responseObserver = new StreamObserver<ChatMessage>() {
+            @Override
+            public void onNext(ChatMessage message) {
+                if (!message.getSender().equals(ChatClient.this.sender)) {
+                    LocalDateTime dateTime = LocalDateTime.ofInstant(
+                            Instant.ofEpochSecond(message.getTimestamp()),
+                            ZoneId.systemDefault()
+                    );
+                    String ansiClearLine = "\r\u001b[2K";
+                    String traceInfo = "[TraceID: " + message.getTraceId() + "]\n";
+                    String formattedMessage = "[" + dateTime.format(TIME_FORMATTER) + "] "
+                            + message.getSender() + ": " + message.getMessage();
+
+                    System.out.print(ansiClearLine + traceInfo + formattedMessage + "\n");
+                    System.out.flush();
+                    // Añadir esta línea para redibujar el prompt después de un mensaje entrante
+                    System.out.print("[" + LocalDateTime.now().format(TIME_FORMATTER) + "] Tú: ");
+                    System.out.flush();
+                }
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                System.err.println("\nError en la conexión de texto: " + t.getMessage()); // Mantener System.err para errores
+                finishLatch.countDown();
+            }
+
+            @Override
+            public void onCompleted() {
+                printMessage("La conexión de texto ha sido cerrada.");
+                finishLatch.countDown();
+            }
+        };
+
+        final StreamObserver<ChatMessage> requestObserver = asyncStub.joinChatRoom(responseObserver);
+
+        try {
+            ChatMessage joinMessage = ChatMessage.newBuilder()
+                    .setSender(sender)
+                    .setMessage(sender + " se ha unido a la sala.")
+                    .setRoomId(roomId)
+                    .setTimestamp(Instant.now().getEpochSecond())
+                    .setTraceId(UUID.randomUUID().toString())
+                    .build();
+            requestObserver.onNext(joinMessage);
+
+            printMessage("Ya puedes chatear. Escribe tu mensaje y presiona Enter.");
+            printMessage("Usa /mic on para enviar tu voz, /mic off para silenciarte.");
+            printMessage("Usa /listen on para escuchar, /listen off para dejar de escuchar.");
+            printMessage("El audio se activará automáticamente con /mic on o /listen on.");
+
+            Thread inputThread = new Thread(() -> {
+                Scanner scanner = new Scanner(System.in);
+                while (!Thread.currentThread().isInterrupted() && finishLatch.getCount() > 0) {
+                    // El prompt se redibuja por printMessage o responseObserver.onNext.
+                    // Si no ha habido actividad, esperamos la entrada sin un prompt explícito aquí.
+                    // El primer prompt se imprime en joinChatRoom.
+                    if (scanner.hasNextLine()) {
+                        String line = scanner.nextLine();
+                        String trimmedLine = line.trim();
+
+                        if (trimmedLine.equalsIgnoreCase("/quit") ||
+                            trimmedLine.equalsIgnoreCase("/exit") ||
+                            trimmedLine.equalsIgnoreCase("/disconnect")) {
+                            
+                            printMessage("Saliendo del chat...");
+                            ChatMessage leaveMessage = ChatMessage.newBuilder()
+                                    .setSender(ChatClient.this.sender)
+                                    .setMessage(ChatClient.this.sender + " ha salido de la sala.")
+                                    .setRoomId(ChatClient.this.roomId)
+                                    .setTimestamp(Instant.now().getEpochSecond())
+                                    .setTraceId(UUID.randomUUID().toString())
+                                    .build();
+                            requestObserver.onNext(leaveMessage);
+                            requestObserver.onCompleted(); // Completes client's text stream
+                            finishLatch.countDown(); // Desbloquear el hilo principal inmediatamente
+                            break; // Exits inputThread loop
+                        } else if (trimmedLine.equalsIgnoreCase("/mic on")) {
+                            if (!audioStreamer.isGrpcStreamActive()) audioStreamer.startAudioConnection();
+                            audioStreamer.startSpeakers();
+                            audioStreamer.startMic();
+                            continue;
+                        } else if (trimmedLine.equalsIgnoreCase("/mic off")) {
+                            audioStreamer.stopMic();
+                            audioStreamer.stopSpeakers();
+                            if (!audioStreamer.isMicActive() && !audioStreamer.isSpeakersActive()) {
+                                audioStreamer.stopAudioConnection();
+                            }
+                            continue;
+                        } else if (trimmedLine.equalsIgnoreCase("/listen on")) {
+                            if (!audioStreamer.isGrpcStreamActive()) audioStreamer.startAudioConnection();
+                            audioStreamer.startSpeakers();
+                            continue;
+                        } else if (trimmedLine.equalsIgnoreCase("/listen off")) {
+                            audioStreamer.stopSpeakers();
+                            if (!audioStreamer.isMicActive() && !audioStreamer.isSpeakersActive()) {
+                                audioStreamer.stopAudioConnection();
+                            }
+                            continue;
+                        }
+
+                        if (!trimmedLine.isEmpty()) {
+                            ChatMessage chatMessage = ChatMessage.newBuilder()
+                                    .setSender(ChatClient.this.sender)
+                                    .setMessage(trimmedLine)
+                                    .setRoomId(ChatClient.this.roomId)
+                                    .setTimestamp(Instant.now().getEpochSecond())
+                                    .setTraceId(UUID.randomUUID().toString())
+                                    .build();
+                            requestObserver.onNext(chatMessage);
+                        }
+                    } else {
+                        requestObserver.onCompleted();
+                        break;
+                    }
+                }
+                scanner.close();
+            });
+            inputThread.setDaemon(true);
+            inputThread.start();
+
+            finishLatch.await();
+
+        } catch (RuntimeException e) {
+            requestObserver.onError(e);
+            throw e;
+        } finally {
+            if (audioStreamer != null && audioStreamer.isGrpcStreamActive()) {
+                audioStreamer.stopAudioConnection();
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+
+        System.out.print("Ingresa tu nombre: ");
+        String sender = scanner.nextLine().trim();
+
+        System.out.print("Ingresa el ID de la sala: ");
+        String roomId = scanner.nextLine().trim();
+
+        if (sender.isEmpty() || roomId.isEmpty()) {
+            System.err.println("¡El nombre y el ID de la sala no pueden estar vacíos!");
+            return;
+        }
+
+        ChatClient client = new ChatClient("localhost", 50051);
+        try {
+            client.joinChatRoom(sender, roomId);
+        } catch (InterruptedException e) {
+            System.err.println("Chat interrumpido: " + e.getMessage());
+        } finally {
+            try {
+                client.shutdown();
+            }
+            catch (InterruptedException e) {
+                System.err.println("Error al cerrar: " + e.getMessage());
+            }
+        }
+    }
+}

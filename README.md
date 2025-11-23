@@ -1,22 +1,31 @@
-# Proyecto de Chat gRPC Multi-Lenguaje
+# Proyecto de Chat gRPC con Streaming de Audio
 
-Este proyecto implementa un sistema de chat de conferencia usando gRPC con streaming bidireccional. Incluye un servidor en Go y clientes en múltiples lenguajes de programación.
+Este proyecto implementa un sistema de chat de conferencia usando gRPC con streaming bidireccional, incluyendo streaming de audio en tiempo real. Incluye un servidor en Go y clientes en Go y Java.
 
 ## 🎯 Inicio Rápido
 
-Si quieres empezar rápidamente, lee `QUICKSTART.md` para una guía paso a paso.
+## 🎯 Características
 
-Si necesitas instalar herramientas, consulta `INSTALL.md`.
+- ✅ Streaming bidireccional de mensajes en tiempo real
+- ✅ **Streaming de audio bidireccional** con PortAudio
+- ✅ Transferencia de archivos entre usuarios
+- ✅ Soporte para múltiples salas de chat
+- ✅ Múltiples clientes simultáneos
+- ✅ Compilación multiplataforma (Linux, macOS, Windows)
+- ✅ JAR ejecutable standalone para Java
+- ✅ Build tags para soporte multiplataforma en Go
 
 ## 📁 Estructura del Proyecto
 
 ```
 proyecto/
 ├── chat-server/          # Servidor gRPC en Go
-├── go-client/            # Cliente en Go
-├── python-client/        # Cliente en Python
-├── rust-client/          # Cliente en Rust
-├── java-client/          # Cliente en Java
+├── go-client/            # Cliente en Go con soporte de audio
+│   ├── audio_streamer_unix.go    # Implementación audio para Linux/macOS
+│   └── audio_streamer_windows.go # Implementación audio para Windows
+├── java-client/          # Cliente en Java con soporte de audio
+├── python-client/        # Cliente en Python (legacy)
+├── c-client/             # Cliente en C (legacy)
 ├── Makefile              # Makefile general para gestionar todo el proyecto
 └── README.md             # Este archivo
 ```
@@ -47,20 +56,31 @@ El servidor escuchará en el puerto **50051**.
 
 ### Ejecutar un Cliente
 
-Puedes ejecutar cualquiera de los clientes disponibles:
+Puedes ejecutar los clientes disponibles:
 
 ```bash
 # Cliente Go
 make go-client
 
-# Cliente Python
-make python-client
-
-# Cliente Rust
-make rust-client
-
 # Cliente Java
 make java-client
+```
+
+### Compilar para Windows (Go)
+
+```bash
+# Cross-compilar cliente Go para Windows desde Linux/macOS
+make go-client-build-windows
+```
+
+### Crear JAR Ejecutable (Java)
+
+```bash
+# Compilar JAR con todas las dependencias
+make java-client-jar
+
+# Ejecutar el JAR
+java -jar java-client/target/chat-client-1.0-SNAPSHOT-jar-with-dependencies.jar
 ```
 
 ### Generar Código Protobuf
@@ -103,22 +123,30 @@ Antes de comenzar, asegúrate de tener instalado:
   ```
   Asegúrate de que `$(go env GOPATH)/bin` esté en tu `PATH`.
 
-### Para el Cliente Python
+### Para Soporte de Audio
 
-- **Python 3.8+**: [Descargar Python](https://www.python.org/downloads/)
-- **Poetry** (gestor de dependencias moderno para Python): [Instalar Poetry](https://python-poetry.org/docs/#installation)
+**PortAudio** (requerido para Go y Java):
+- **Linux (Debian/Ubuntu)**:
   ```bash
-  curl -sSL https://install.python-poetry.org | python3 -
+  sudo apt-get install portaudio19-dev
   ```
-- Instalar dependencias del proyecto:
+- **Linux (Arch)**:
   ```bash
-  cd python-client && poetry install
+  sudo pacman -S portaudio
   ```
+- **macOS**:
+  ```bash
+  brew install portaudio
+  ```
+- **Windows**: Las DLLs de PortAudio deben estar en el PATH
 
-### Para el Cliente Rust
+### Para Cross-Compilation a Windows (Go)
 
-- **Rust**: [Instalar Rust](https://www.rust-lang.org/tools/install)
-- **Cargo** (viene con Rust)
+**MinGW-w64** (solo si compilas desde Linux/macOS):
+```bash
+sudo apt-get install mingw-w64  # Debian/Ubuntu
+sudo pacman -S mingw-w64-gcc    # Arch Linux
+```
 
 ### Para el Cliente Java
 
@@ -163,31 +191,7 @@ go mod tidy
 go run main.go
 ```
 
-### 3. Cliente Python
-
-```bash
-cd python-client
-
-# Instalar dependencias (si no lo hiciste antes)
-poetry install
-
-# Generar código proto
-poetry run python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. --pyi_out=. proto/chat.proto
-
-# Ejecutar cliente
-poetry run python chat_client.py
-```
-
-### 4. Cliente Rust
-
-```bash
-cd rust-client
-
-# Compilar y ejecutar (cargo maneja la generación de proto automáticamente)
-cargo run --release
-```
-
-### 5. Cliente Java
+### 3. Cliente Java
 
 ```bash
 cd java-client
@@ -210,7 +214,7 @@ mvn exec:java
 
 3. **Ejecuta un cliente** en cada terminal:
    ```bash
-   make go-client      # o python-client, rust-client, java-client
+   make go-client      # o java-client
    ```
 
 4. **Ingresa tu nombre** cuando se te pida.
@@ -218,6 +222,18 @@ mvn exec:java
 5. **Ingresa el ID de la sala** (por ejemplo: "sala1"). Los clientes en la misma sala podrán verse los mensajes entre sí.
 
 6. **¡Empieza a chatear!** Escribe tus mensajes y presiona Enter. Verás los mensajes de otros usuarios en la misma sala.
+
+### Comandos del Chat
+
+#### Comandos de Texto
+- Escribe cualquier mensaje y presiona Enter para enviarlo
+- `/quit`, `/exit`, `/disconnect` - Salir del chat
+
+#### Comandos de Audio
+- `/mic on` - Activar micrófono y altavoces (hablar y escuchar)
+- `/mic off` - Desactivar micrófono y altavoces
+- `/listen on` - Activar solo altavoces (escuchar sin transmitir)
+- `/listen off` - Desactivar altavoces
 
 ## 🏗️ Arquitectura del Sistema
 
@@ -228,8 +244,26 @@ El sistema usa **streaming bidireccional** de gRPC, definido en el archivo `.pro
 ```protobuf
 service ChatService {
   rpc JoinChatRoom(stream ChatMessage) returns (stream ChatMessage);
+  rpc StreamAudio(stream AudioChunk) returns (stream AudioChunk);
+  rpc TransferFile(stream FileChunk) returns (FileTransferResponse);
 }
 ```
+
+### Streaming de Audio
+
+El audio se transmite en tiempo real usando gRPC bidirectional streaming:
+- **Sample Rate**: 44.1 kHz
+- **Canales**: Mono (1 canal)
+- **Profundidad**: 16 bits
+- **Buffer**: 1024 frames
+
+#### Implementación Multiplataforma
+
+El cliente Go utiliza **build tags** para soporte multiplataforma:
+- `//go:build !windows` - `audio_streamer_unix.go` para Linux y macOS
+- `//go:build windows` - `audio_streamer_windows.go` para Windows
+
+Ambos utilizan la biblioteca **PortAudio** para captura y reproducción de audio.
 
 ### Flujo de Comunicación
 
@@ -261,8 +295,10 @@ Instala el compilador de Protocol Buffers siguiendo las [instrucciones oficiales
 ### Error: "cannot find package" en Go
 Ejecuta `go mod tidy` en el directorio del servidor o cliente Go.
 
-### Error: "No module named 'grpc'" en Python
-Instala las dependencias: `pip install -r python-client/requirements.txt`
+### Error: "PortAudio no encontrado"
+- **Linux**: `sudo apt-get install portaudio19-dev`
+- **macOS**: `brew install portaudio`
+- **Windows**: Descargar DLLs de PortAudio desde el sitio oficial
 
 ### Error de conexión al servidor
 Asegúrate de que:
@@ -273,13 +309,24 @@ Asegúrate de que:
 ### El cliente Java no compila
 Verifica que tienes Maven instalado: `mvn --version`
 
+### Error al compilar para Windows desde Linux
+Instala MinGW-w64:
+```bash
+sudo apt-get install mingw-w64  # Debian/Ubuntu
+```
+
+### JAR no se ejecuta
+Verifica que tienes Java 11+:
+```bash
+java -version
+```
+
 ## 📚 Recursos Adicionales
 
 - [Documentación oficial de gRPC](https://grpc.io/docs/)
 - [Tutorial de gRPC en Go](https://grpc.io/docs/languages/go/quickstart/)
-- [Tutorial de gRPC en Python](https://grpc.io/docs/languages/python/quickstart/)
-- [Tutorial de gRPC en Rust](https://github.com/hyperium/tonic)
 - [Tutorial de gRPC en Java](https://grpc.io/docs/languages/java/quickstart/)
+- [Documentación de PortAudio](http://www.portaudio.com/)
 
 ## 📝 Notas de Implementación
 
@@ -288,15 +335,26 @@ Verifica que tienes Maven instalado: `mvn --version`
 - **Timestamps**: Todos los mensajes incluyen timestamps Unix para mostrar la hora
 - **Desconexión**: El servidor detecta y maneja automáticamente cuando un cliente se desconecta
 
-## 🎯 Características
+## 📦 Distribución de Binarios
 
-- ✅ Streaming bidireccional en tiempo real
-- ✅ Soporte para múltiples salas de chat
-- ✅ Múltiples clientes simultáneos
-- ✅ Implementaciones en 4 lenguajes diferentes
-- ✅ Makefile para facilitar el desarrollo
-- ✅ Manejo robusto de errores y desconexiones
-- ✅ Timestamps en los mensajes
+### Cliente Go para Windows
+
+Para distribuir el cliente Go en Windows:
+
+1. Compilar desde Linux/macOS:
+   ```bash
+   make go-client-build-windows
+   ```
+
+2. Distribuir `go-client/client.exe` junto con las DLLs de PortAudio
+
+### Cliente Java (Multiplataforma)
+
+El JAR con dependencias funciona en cualquier sistema con Java 11+:
+
+```bash
+java -jar java-client/target/chat-client-1.0-SNAPSHOT-jar-with-dependencies.jar
+```
 
 ## 🤝 Contribución
 

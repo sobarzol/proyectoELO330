@@ -2,10 +2,10 @@ SHELL := /bin/bash
 
 .PHONY: help proto clean install-deps check-tools \
 	server server-proto server-build server-run \
-	go-client go-client-proto go-client-build go-client-run \
+	go-client go-client-proto go-client-build go-client-build-windows go-client-run \
 	python-client python-client-proto python-client-run \
 	c-client c-client-build c-client-run \
-	java-client java-client-proto java-client-build java-client-run \
+	java-client java-client-proto java-client-build java-client-jar java-client-run \
 	all build
 
 # Directorios
@@ -41,10 +41,11 @@ help:
 	@echo -e "  \033[0;32mmake server\033[0m        - Generate proto, build and run server"
 	@echo ""
 	@echo -e "\033[0;33mGo Client Commands:\033[0m"
-	@echo -e "  \033[0;32mmake go-client-proto\033[0m - Generate Go client protobuf code"
-	@echo -e "  \033[0;32mmake go-client-build\033[0m - Build the Go client"
-	@echo -e "  \033[0;32mmake go-client-run\033[0m   - Run the Go client"
-	@echo -e "  \033[0;32mmake go-client\033[0m       - Generate proto, build and run Go client"
+	@echo -e "  \033[0;32mmake go-client-proto\033[0m         - Generate Go client protobuf code"
+	@echo -e "  \033[0;32mmake go-client-build\033[0m         - Build the Go client"
+	@echo -e "  \033[0;32mmake go-client-build-windows\033[0m - Build the Go client for Windows"
+	@echo -e "  \033[0;32mmake go-client-run\033[0m           - Run the Go client"
+	@echo -e "  \033[0;32mmake go-client\033[0m               - Generate proto, build and run Go client"
 	@echo ""
 	@echo -e "\033[0;33mPython Client Commands:\033[0m"
 	@echo -e "  \033[0;32mmake python-client-proto\033[0m - Generate Python client protobuf code"
@@ -59,6 +60,7 @@ help:
 	@echo -e "\033[0;33mJava Client Commands:\033[0m"
 	@echo -e "  \033[0;32mmake java-client-proto\033[0m - Generate Java client protobuf code"
 	@echo -e "  \033[0;32mmake java-client-build\033[0m - Build the Java client"
+	@echo -e "  \033[0;32mmake java-client-jar\033[0m   - Build executable JAR with dependencies"
 	@echo -e "  \033[0;32mmake java-client-run\033[0m   - Run the Java client"
 	@echo -e "  \033[0;32mmake java-client\033[0m       - Generate proto, build and run Java client"
 	@echo ""
@@ -156,6 +158,11 @@ go-client-build: go-client-proto
 	@cd $(GO_CLIENT_DIR) && go build -o client .
 	@echo -e "\033[0;32mGo client built successfully!\033[0m"
 
+go-client-build-windows: go-client-proto
+	@echo -e "\033[0;34mBuilding Go client for Windows...\033[0m"
+	@cd $(GO_CLIENT_DIR) && GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -o client.exe .
+	@echo -e "\033[0;32mGo client for Windows built successfully!\033[0m"
+
 go-client-run: go-client-build
 	@echo -e "\033[0;32mStarting Go client...\033[0m"
 	@cd $(GO_CLIENT_DIR) && ./client
@@ -208,9 +215,15 @@ java-client-build: java-client-proto
 	@cd $(JAVA_CLIENT_DIR) && mvn compile
 	@echo -e "\033[0;32mJava client built successfully!\033[0m"
 
+java-client-jar: java-client-proto
+	@echo -e "\033[0;34mBuilding Java client JAR with dependencies...\033[0m"
+	@cd $(JAVA_CLIENT_DIR) && mvn clean package
+	@echo -e "\033[0;32mJava client JAR built successfully!\033[0m"
+	@echo -e "\033[0;33mRun with: java -jar $(JAVA_CLIENT_DIR)/target/chat-client-1.0-SNAPSHOT-jar-with-dependencies.jar\033[0m"
+
 java-client-run: java-client-build
 	@echo -e "\033[0;32mStarting Java client...\033[0m"
-	@cd $(JAVA_CLIENT_DIR) && mvn exec:java
+	@cd $(JAVA_CLIENT_DIR) && MAVEN_OPTS="--enable-native-access=ALL-UNNAMED" mvn exec:java
 
 java-client: java-client-run
 
