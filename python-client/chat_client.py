@@ -23,19 +23,21 @@ class ChatClient:
         self.audio_streamer = AudioStreamer(stub, sender, room_id)
         self.running = True
 
-    def generate_messages(self):
+    def generate_messages(self, first_message_sent):
         """
         Generador que produce mensajes del usuario
         """
-        # Primer mensaje: unirse a la sala
-        join_msg = chat_pb2.ChatMessage(
-            sender=self.sender,
-            message=f"{self.sender} se ha unido a la sala.",
-            room_id=self.room_id,
-            timestamp=int(time.time()),
-            trace_id=str(uuid.uuid4())
-        )
-        yield join_msg
+        # Primer mensaje: unirse a la sala (solo si no se ha enviado antes)
+        if not first_message_sent[0]:
+            join_msg = chat_pb2.ChatMessage(
+                sender=self.sender,
+                message=f"{self.sender} se ha unido a la sala.",
+                room_id=self.room_id,
+                timestamp=int(time.time()),
+                trace_id=str(uuid.uuid4())
+            )
+            first_message_sent[0] = True
+            yield join_msg
 
         # Bucle para leer mensajes del usuario
         print("Ya puedes chatear. Escribe tu mensaje y presiona Enter.")
@@ -126,26 +128,76 @@ def run():
     """
     Función principal del cliente
     """
-    # Pedir datos del usuario
-    sender = input("Ingresa tu nombre: ").strip()
-    room_id = input("Ingresa el ID de la sala: ").strip()
-
-    if not sender or not room_id:
-        print("¡El nombre y el ID de la sala no pueden estar vacíos!")
-        return
-
+    # Pedir dirección del servidor
+    server_addr = input("Dirección del servidor [localhost]: ").strip()
+    if not server_addr:
+        server_addr = "localhost"
+    
+    server_port = input("Puerto del servidor [50051]: ").strip()
+    if not server_port:
+        server_port = "50051"
+    
+    server = f"{server_addr}:{server_port}"
+    print(f"\n🔌 Conectando a {server}...")
+    
     # Conectar al servidor
-    channel = grpc.insecure_channel('localhost:50051')
-    stub = chat_pb2_grpc.ChatServiceStub(channel)
-
-    # Crear cliente de chat
-    chat_client = ChatClient(stub, sender, room_id)
+    try:
+        channel = grpc.insecure_channel(server)
+        stub = chat_pb2_grpc.ChatServiceStub(channel)
+        print("✅ Conectado al servidor exitosamente\n")
+    except Exception as e:
+        print(f"❌ Error al conectar: {e}")
+        return
+    
+    # Prompts mejorados
+    print("━" * 50)
+    print("           UNIRSE A UNA SALA DE CHAT")
+    print("━" * 50)
+    
+    room_id = input("\n🏠 ID de la sala (ej: 1, sala1, proyecto): ").strip()
+    
+    if not room_id:
+        print("¡El ID de la sala no puede estar vacío!")
+        channel.close()
+        return
+    
+    # Loop para obtener un nombre válido
+    while True:
+        sender = input("👤 Tu nombre de usuario: ").strip()
+        
+        if not sender:
+            print("El nombre no puede estar vacío. Intenta de nuevo.")
+            continue
+        
+        # Intentar unirse a la sala
+        first_message_sent = [False]
+        chat_client = ChatClient(stub, sender, room_id)
+        
+        try:
+            # Iniciar el stream bidireccional
+            response_iterator = stub.JoinChatRoom(chat_client.generate_messages(first_message_sent))
+            
+            # Esperar la primera respuesta para verificar si el nombre está disponible
+            first_response = next(response_iterator)
+            
+            # Verificar si es un mensaje de error de nombre duplicado
+            if first_response.sender == "Servidor" and first_response.message.startswith("ERROR:NAME_TAKEN:"):
+                error_msg = first_response.message.replace("ERROR:NAME_TAKEN:", "")
+                print(f"\n❌ {error_msg}")
+                print("Por favor, elige otro nombre.\n")
+                continue
+            
+            # Si no es error, el nombre está disponible
+            print(f"✅ Conectado exitosamente como '{sender}' en sala '{room_id}'\n")
+            break
+            
+        except grpc.RpcError as e:
+            print(f"Error al conectar con el servidor: {e}")
+            channel.close()
+            return
 
     try:
-        # Iniciar el stream bidireccional
-        response_iterator = stub.JoinChatRoom(chat_client.generate_messages())
-
-        # Iniciar hilo para recibir mensajes
+        # Iniciar hilo para recibir mensajes (usando el response_iterator existente)
         receive_thread = threading.Thread(
             target=receive_messages,
             args=(response_iterator, chat_client),

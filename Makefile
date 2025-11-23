@@ -4,7 +4,7 @@ SHELL := /bin/bash
 	server server-proto server-build server-run \
 	go-client go-client-proto go-client-build go-client-run \
 	python-client python-client-proto python-client-run \
-	rust-client rust-client-build rust-client-run \
+	c-client c-client-build c-client-run \
 	java-client java-client-proto java-client-build java-client-run \
 	all build
 
@@ -12,7 +12,7 @@ SHELL := /bin/bash
 SERVER_DIR := chat-server
 GO_CLIENT_DIR := go-client
 PYTHON_CLIENT_DIR := python-client
-RUST_CLIENT_DIR := rust-client
+C_CLIENT_DIR := c-client
 JAVA_CLIENT_DIR := java-client
 
 # Go tools paths
@@ -51,10 +51,10 @@ help:
 	@echo -e "  \033[0;32mmake python-client-run\033[0m   - Run the Python client"
 	@echo -e "  \033[0;32mmake python-client\033[0m       - Generate proto and run Python client"
 	@echo ""
-	@echo -e "\033[0;33mRust Client Commands:\033[0m"
-	@echo -e "  \033[0;32mmake rust-client-build\033[0m - Build the Rust client"
-	@echo -e "  \033[0;32mmake rust-client-run\033[0m   - Run the Rust client"
-	@echo -e "  \033[0;32mmake rust-client\033[0m       - Build and run Rust client"
+	@echo -e "\033[0;33mC Client Commands:\033[0m"
+	@echo -e "  \033[0;32mmake c-client-build\033[0m - Build the C client"
+	@echo -e "  \033[0;32mmake c-client-run\033[0m   - Run the C client"
+	@echo -e "  \033[0;32mmake c-client\033[0m       - Build and run C client"
 	@echo ""
 	@echo -e "\033[0;33mJava Client Commands:\033[0m"
 	@echo -e "  \033[0;32mmake java-client-proto\033[0m - Generate Java client protobuf code"
@@ -81,6 +81,8 @@ check-tools:
 	@which cargo > /dev/null 2>&1 && echo -e "\033[0;32m✓\033[0m" || echo -e "\033[0;31m✗ Not found\033[0m"
 	@echo -n -e "\033[0;33mChecking Maven...\033[0m "
 	@which mvn > /dev/null 2>&1 && echo -e "\033[0;32m✓\033[0m" || echo -e "\033[0;31m✗ Not found\033[0m"
+	@echo -n -e "\033[0;33mChecking GCC...\033[0m "
+	@which gcc > /dev/null 2>&1 && echo -e "\033[0;32m✓\033[0m" || echo -e "\033[0;31m✗ Not found\033[0m"
 
 # Install all dependencies
 install-deps:
@@ -94,6 +96,8 @@ install-deps:
 	@cargo --version || echo -e "\033[0;31mPlease install Rust from https://rustup.rs/\033[0m"
 	@echo -e "\033[0;33mChecking Java/Maven...\033[0m"
 	@mvn --version || echo -e "\033[0;31mPlease install Maven from https://maven.apache.org/\033[0m"
+	@echo -e "\033[0;33mChecking GCC...\033[0m"
+	@gcc --version || echo -e "\033[0;31mPlease install GCC\033[0m"
 	@echo -e "\033[0;32mDependencies installation completed!\033[0m"
 
 # Generate all proto files
@@ -101,7 +105,7 @@ proto: server-proto go-client-proto python-client-proto java-client-proto
 	@echo -e "\033[0;32mAll proto files generated!\033[0m"
 
 # Build all projects
-build: server-build go-client-build rust-client-build java-client-build
+build: server-build go-client-build c-client-build java-client-build
 	@echo -e "\033[0;32mAll projects built!\033[0m"
 
 # Clean all generated files
@@ -110,7 +114,7 @@ clean:
 	@cd $(SERVER_DIR) && rm -f chat/*.pb.go
 	@cd $(GO_CLIENT_DIR) && rm -f chat/*.pb.go
 	@cd $(PYTHON_CLIENT_DIR) && rm -f proto/*_pb2.py proto/*_pb2_grpc.py proto/*_pb2.pyi
-	@cd $(RUST_CLIENT_DIR) && cargo clean
+	@cd $(C_CLIENT_DIR) && make clean
 	@cd $(JAVA_CLIENT_DIR) && mvn clean
 	@echo -e "\033[0;32mClean completed!\033[0m"
 
@@ -176,19 +180,19 @@ python-client-run: python-client-proto
 python-client: python-client-run
 
 # ═══════════════════════════════════════════════════════════════
-# RUST CLIENT
+# C CLIENT
 # ═══════════════════════════════════════════════════════════════
 
-rust-client-build:
-	@echo -e "\033[0;34mBuilding Rust client...\033[0m"
-	@cd $(RUST_CLIENT_DIR) && cargo build --release
-	@echo -e "\033[0;32mRust client built successfully!\033[0m"
+c-client-build:
+	@echo -e "\033[0;34mBuilding C client...\033[0m"
+	@cd $(C_CLIENT_DIR) && make
+	@echo -e "\033[0;32mC client built successfully!\033[0m"
 
-rust-client-run:
-	@echo -e "\033[0;32mStarting Rust client...\033[0m"
-	@cd $(RUST_CLIENT_DIR) && cargo run --release
+c-client-run: c-client-build
+	@echo -e "\033[0;32mStarting C client...\033[0m"
+	@cd $(C_CLIENT_DIR) && ./client
 
-rust-client: rust-client-run
+c-client: c-client-run
 
 # ═══════════════════════════════════════════════════════════════
 # JAVA CLIENT

@@ -38,7 +38,6 @@ func printHelp() {
 	fmt.Println("  /upload /home/user/doc.pdf Juan")
 	fmt.Println("  /mic on")
 	fmt.Println("\n═══════════════════════════════════════════════════════\n")
-	fmt.Printf("[%s] Tú: ", time.Now().Format("15:04"))
 }
 
 func main() {
@@ -201,9 +200,9 @@ func main() {
 						}
 					}
 				} else {
-					// \r moves cursor to beginning of line, \x1b[2K clears the entire line
+					// Limpiar línea actual, mostrar mensaje, y reimprimir prompt
 					fmt.Printf("\r\x1b[2K[%s] %s: %s\n", time.Unix(in.Timestamp, 0).Format("15:04"), in.Sender, in.Message)
-					fmt.Printf("[%s] Tú: ", time.Now().Format("15:04")) // Reprint prompt
+					fmt.Printf("[%s] Tú: ", time.Now().Format("15:04"))
 				}
 			}
 		}

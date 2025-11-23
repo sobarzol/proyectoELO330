@@ -25,14 +25,19 @@
 **/.pytest_cache/
 **/*.egg-info/
 
-# Rust
-**/target/
-**/*.rs.bk
-**/Cargo.lock
+# C
+**/*.o
+**/*.a
+**/*.so
+**/client
+**/server
+**/*.pb-c.c
+**/*.pb-c.h
 
 # Java
 **/target/
 **/*.class
+!java-client/src/**/*.class
 **/*.jar
 **/*.war
 **/*.ear
