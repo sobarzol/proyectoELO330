@@ -1,0 +1,68 @@
+// Definición del servicio gRPC para un chat de conferencia
+syntax = "proto3";
+
+package chat;
+
+option go_package = "chat-server/chat";
+option java_package = "com.chat.grpc";
+option java_multiple_files = true;
+
+// Mensaje para un chat del participante
+message ChatMessage {
+  string sender = 1;      // Nombre del participante que envía el mensaje
+  string message = 2;     // Contenido del mensaje de texto
+  string room_id = 3;     // ID de la sala de chat
+  int64 timestamp = 4;    // Marca de tiempo del mensaje (Unix epoch seconds)
+  string trace_id = 5;    // ID de Trazabilidad para tracing distribuido
+}
+
+// Mensaje para un fragmento de audio
+message AudioChunk {
+  bytes data = 1;         // Datos de audio en formato PCM
+}
+
+// Mensaje para solicitar transferencia de archivo
+message FileTransferRequest {
+  string sender = 1;        // Quien envía el archivo
+  string recipient = 2;     // Quien recibe el archivo
+  string room_id = 3;       // ID de la sala
+  string filename = 4;      // Nombre del archivo
+  int64 file_size = 5;      // Tamaño del archivo en bytes
+  string transfer_id = 6;   // ID único de la transferencia
+  int64 timestamp = 7;      // Timestamp de la solicitud
+}
+
+// Mensaje de respuesta a transferencia de archivo
+message FileTransferResponse {
+  string transfer_id = 1;   // ID de la transferencia
+  bool accepted = 2;        // true = aceptado, false = rechazado
+  string sender = 3;        // Quien responde
+  string recipient = 4;     // Destinatario original
+  string room_id = 5;       // ID de la sala
+}
+
+// Mensaje para chunk de archivo
+message FileChunk {
+  string transfer_id = 1;   // ID de la transferencia
+  bytes data = 2;           // Datos del chunk
+  int32 chunk_number = 3;   // Número del chunk (para ordenar)
+  bool is_last = 4;         // true si es el último chunk
+}
+
+// Servicio de Conferencia de Chat
+service ChatService {
+  // Stream para el chat de texto
+  rpc JoinChatRoom(stream ChatMessage) returns (stream ChatMessage);
+
+  // Stream para el chat de voz
+  rpc StreamAudio(stream AudioChunk) returns (stream AudioChunk);
+
+  // Stream para transferencia de archivos
+  rpc TransferFile(stream FileChunk) returns (stream FileChunk);
+
+  // RPC para solicitar transferencia de archivo
+  rpc RequestFileTransfer(FileTransferRequest) returns (FileTransferResponse);
+
+  // RPC para responder a solicitud de transferencia
+  rpc RespondFileTransfer(FileTransferResponse) returns (FileTransferResponse);
+}

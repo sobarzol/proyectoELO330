@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "chat-client"
+version = "1.0.0"
+description = "gRPC Chat Client in Python"
+authors = ["ELO330 Students"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+grpcio = "^1.65.0"
+grpcio-tools = "^1.65.0"
+protobuf = "^5.27.0"
+
+[tool.poetry.scripts]
+chat-client = "chat_client:run"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

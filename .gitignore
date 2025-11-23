@@ -1,0 +1,62 @@
+# Archivos generados por protobuf
+**/*_pb2.py
+**/*_pb2_grpc.py
+**/*_pb2.pyi
+**/*.pb.go
+
+# Go
+**/go.sum
+**/*.exe
+**/*.test
+**/*.out
+**/server
+**/client
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.so
+**/.Python
+**/env/
+**/venv/
+**/.venv/
+**/poetry.lock
+**/.pytest_cache/
+**/*.egg-info/
+
+# Rust
+**/target/
+**/*.rs.bk
+**/Cargo.lock
+
+# Java
+**/target/
+**/*.class
+**/*.jar
+**/*.war
+**/*.ear
+**/.settings/
+**/.classpath
+**/.project
+
+# IDEs
+**/.vscode/
+**/.idea/
+**/*.swp
+**/*.swo
+**/*~
+**/.DS_Store
+
+# Build artifacts
+**/build/
+**/dist/
+**/*.log
+
+# Environment files
+.env
+
+# Chat application artifacts
+**/Descargas/
+**/Downloads/
+**/chat-downloads/
