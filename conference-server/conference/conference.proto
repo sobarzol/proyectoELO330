@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package conference;
+
+option go_package = "conference-server/conference";
+option java_package = "com.conference.grpc";
+option java_multiple_files = true;
+
+// --- File Transfer Messages ---
+message FileTransferRequest {
+  string sender = 1;
+  string recipient = 2;
+  string room_id = 3;
+  string filename = 4;
+  int64 file_size = 5;
+  string transfer_id = 6;
+  int64 timestamp = 7;
+}
+
+message FileTransferResponse {
+  string transfer_id = 1;
+  bool accepted = 2;
+  string sender = 3;
+  string recipient = 4;
+  string room_id = 5;
+}
+
+message FileChunk {
+  string transfer_id = 1;
+  bytes data = 2;
+  int32 chunk_number = 3;
+  bool is_last = 4;
+}
+
+// --- Real-time Messages ---
+message ChatMessage {
+    string sender = 1;
+    string content = 2;
+    string room_id = 3;
+    int64 timestamp = 4;
+    string trace_id = 5;
+}
+
+message AudioChunk {
+    bytes data = 1; // Datos de audio PCM
+}
+
+message Command {
+    string type = 1; // Ej: "JOIN", "LEAVE", "HEARTBEAT"
+    string value = 2; // Ej: ID de sala, estado de mute
+}
+
+message BroadcastFileAnnouncement {
+    string filename = 1;
+    int64 file_size = 2;
+    string transfer_id = 3;
+}
+
+message PrivateMessage {
+    string recipient_id = 1;
+    string content = 2;
+}
+
+
+// MENSAJE PRINCIPAL UNIFICADO (Payload para el streaming en tiempo real)
+message ConferenceData {
+    string room_id = 1; 
+    string sender = 2;
+    
+    oneof payload {
+        ChatMessage text_message = 3;
+        AudioChunk audio_chunk = 4;
+        Command command = 5;
+        BroadcastFileAnnouncement file_announcement = 6;
+        PrivateMessage private_message = 7;
+    }
+}
+
+// Servicio de Conferencia (Métodos simplificados)
+service ConferenceService {
+    // Stream Bidireccional Único para texto, audio y comandos
+    rpc JoinConference(stream ConferenceData) returns (stream ConferenceData);
+
+    // RPCs para transferencia de archivos
+    rpc RequestFileTransfer(FileTransferRequest) returns (FileTransferResponse);
+    rpc RespondFileTransfer(FileTransferResponse) returns (FileTransferResponse);
+    rpc TransferFile(stream FileChunk) returns (stream FileChunk);
+}

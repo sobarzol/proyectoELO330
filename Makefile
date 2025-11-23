@@ -9,7 +9,7 @@ SHELL := /bin/bash
 	all build
 
 # Directorios
-SERVER_DIR := chat-server
+SERVER_DIR := conference-server
 GO_CLIENT_DIR := go-client
 PYTHON_CLIENT_DIR := python-client
 C_CLIENT_DIR := c-client
@@ -113,8 +113,8 @@ build: server-build go-client-build c-client-build java-client-build
 # Clean all generated files
 clean:
 	@echo -e "\033[0;33mCleaning generated files...\033[0m"
-	@cd $(SERVER_DIR) && rm -f chat/*.pb.go
-	@cd $(GO_CLIENT_DIR) && rm -f chat/*.pb.go
+	@cd $(SERVER_DIR) && rm -f conference/*.pb.go
+	@cd $(GO_CLIENT_DIR) && rm -f conference/*.pb.go
 	@cd $(PYTHON_CLIENT_DIR) && rm -f proto/*_pb2.py proto/*_pb2_grpc.py proto/*_pb2.pyi
 	@cd $(C_CLIENT_DIR) && make clean
 	@cd $(JAVA_CLIENT_DIR) && mvn clean
@@ -128,7 +128,7 @@ server-proto:
 	@echo -e "\033[0;34mGenerating server protobuf code...\033[0m"
 	@cd $(SERVER_DIR) && protoc --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		chat/chat.proto
+		conference/conference.proto
 	@echo -e "\033[0;32mServer proto files generated!\033[0m"
 
 server-build: server-proto
@@ -150,7 +150,7 @@ go-client-proto:
 	@echo -e "\033[0;34mGenerating Go client protobuf code...\033[0m"
 	@cd $(GO_CLIENT_DIR) && protoc --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		chat/chat.proto
+		conference/conference.proto
 	@echo -e "\033[0;32mGo client proto files generated!\033[0m"
 
 go-client-build: go-client-proto
