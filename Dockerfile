@@ -14,7 +14,7 @@ COPY ./chat-server ./
 RUN go mod download
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /build/chat-server-app ./main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /build/chat-server-app .
 
 # Runtime stage
 FROM alpine:latest
