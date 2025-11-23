@@ -11,6 +11,8 @@ WORKDIR /app
 COPY ./chat-server ./
 
 # Download dependencies and verify
+# go mod tidy regenerates go.sum if missing (needed for Coolify deployment)
+RUN go mod tidy
 RUN go mod download
 RUN go mod verify
 
