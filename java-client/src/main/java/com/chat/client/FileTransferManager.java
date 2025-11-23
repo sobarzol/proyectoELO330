@@ -20,10 +20,17 @@ public class FileTransferManager {
     private final ChatServiceGrpc.ChatServiceStub asyncStub;
     private final String senderName;
     private static final int CHUNK_SIZE = 1024 * 64; // 64KB chunks
+    
+    // Mapa para rastrear transferencias pendientes: transferId -> originalSender
+    private final java.util.Map<String, String> pendingTransfers = new java.util.concurrent.ConcurrentHashMap<>();
 
     public FileTransferManager(ChatServiceGrpc.ChatServiceStub asyncStub, String senderName) {
         this.asyncStub = asyncStub;
         this.senderName = senderName;
+    }
+    
+    public void registerPendingTransfer(String transferId, String originalSender) {
+        pendingTransfers.put(transferId, originalSender);
     }
 
     private void printMessage(String message) {
@@ -126,8 +133,14 @@ public class FileTransferManager {
         });
     }
 
-    public void acceptFile(String transferId, String savePath, String roomId, String originalSender) {
-        printMessage("👍 Aceptando archivo " + transferId + "...");
+    public void acceptFile(String transferId, String savePath, String roomId) {
+        String originalSender = pendingTransfers.get(transferId);
+        if (originalSender == null) {
+            printMessage("❌ Error: No se encontró información para la transferencia " + transferId);
+            return;
+        }
+        
+        printMessage("👍 Aceptando archivo " + transferId + " de " + originalSender + "...");
         
         FileTransferResponse response = FileTransferResponse.newBuilder()
                 .setTransferId(transferId)
@@ -152,12 +165,19 @@ public class FileTransferManager {
             public void onCompleted() {
                 printMessage("📥 Conectando para recibir archivo...");
                 startFileStreamReceiver(transferId, savePath);
+                pendingTransfers.remove(transferId);
             }
         });
     }
 
-    public void rejectFile(String transferId, String roomId, String originalSender) {
-        printMessage("👎 Rechazando archivo " + transferId + "...");
+    public void rejectFile(String transferId, String roomId) {
+        String originalSender = pendingTransfers.get(transferId);
+        if (originalSender == null) {
+            printMessage("❌ Error: No se encontró información para la transferencia " + transferId);
+            return;
+        }
+
+        printMessage("👎 Rechazando archivo " + transferId + " de " + originalSender + "...");
 
         FileTransferResponse response = FileTransferResponse.newBuilder()
                 .setTransferId(transferId)
@@ -179,6 +199,7 @@ public class FileTransferManager {
             @Override
             public void onCompleted() {
                 printMessage("Archivo rechazado correctamente.");
+                pendingTransfers.remove(transferId);
             }
         });
     }
@@ -188,7 +209,7 @@ public class FileTransferManager {
         metadata.put(Metadata.Key.of("role", Metadata.ASCII_STRING_MARSHALLER), "sender");
         metadata.put(Metadata.Key.of("transfer-id", Metadata.ASCII_STRING_MARSHALLER), transferId);
 
-        ChatServiceGrpc.ChatServiceStub stubWithMetadata = MetadataUtils.attachHeaders(asyncStub, metadata);
+        ChatServiceGrpc.ChatServiceStub stubWithMetadata = asyncStub.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata));
 
         StreamObserver<FileChunk> requestObserver = stubWithMetadata.transferFile(new StreamObserver<FileChunk>() {
             @Override
@@ -245,7 +266,7 @@ public class FileTransferManager {
         metadata.put(Metadata.Key.of("role", Metadata.ASCII_STRING_MARSHALLER), "receiver");
         metadata.put(Metadata.Key.of("transfer-id", Metadata.ASCII_STRING_MARSHALLER), transferId);
 
-        ChatServiceGrpc.ChatServiceStub stubWithMetadata = MetadataUtils.attachHeaders(asyncStub, metadata);
+        ChatServiceGrpc.ChatServiceStub stubWithMetadata = asyncStub.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata));
 
         AtomicBoolean success = new AtomicBoolean(false);
 

@@ -45,16 +45,46 @@ public class ChatClient {
         channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
     }
 
+    private FileTransferManager fileTransferManager;
+
     public void joinChatRoom(String sender, String roomId) throws InterruptedException {
         this.sender = sender;
         this.roomId = roomId;
         this.audioStreamer = new AudioStreamer(asyncStub, sender, roomId);
+        this.fileTransferManager = new FileTransferManager(asyncStub, sender);
 
         final CountDownLatch finishLatch = new CountDownLatch(1);
 
         StreamObserver<ChatMessage> responseObserver = new StreamObserver<ChatMessage>() {
             @Override
             public void onNext(ChatMessage message) {
+                // Verificar si es una notificación de transferencia de archivo
+                if (message.getSender().equals("Sistema-FileTransfer") && message.getMessage().startsWith("FILE_REQUEST:")) {
+                    // Formato: FILE_REQUEST:transferId:sender:filename:fileSize:timestamp
+                    String[] parts = message.getMessage().split(":");
+                    if (parts.length >= 6) {
+                        String transferId = parts[1];
+                        String fileSender = parts[2];
+                        String filename = parts[3];
+                        String size = parts[4];
+                        
+                        // Registrar la transferencia pendiente para saber a quién responder
+                        fileTransferManager.registerPendingTransfer(transferId, fileSender);
+                        
+                        System.out.println("\n📦 Solicitud de archivo recibida:");
+                        System.out.println("  De: " + fileSender);
+                        System.out.println("  Archivo: " + filename + " (" + size + " bytes)");
+                        System.out.println("  ID: " + transferId);
+                        System.out.println("Para aceptar: /accept " + transferId + " <ruta_destino>");
+                        System.out.println("Para rechazar: /reject " + transferId);
+                        
+                        // Redibujar prompt
+                        System.out.print("[" + LocalDateTime.now().format(TIME_FORMATTER) + "] Tú: ");
+                        System.out.flush();
+                        return;
+                    }
+                }
+
                 // Mostrar solo mensajes de otros (evitar duplicados por echo local)
                 if (!message.getSender().equals(ChatClient.this.sender)) {
                     LocalDateTime dateTime = LocalDateTime.ofInstant(
@@ -120,6 +150,7 @@ public class ChatClient {
 
                         if (trimmedLine.equalsIgnoreCase("/help")) {
                             printHelp();
+                            printPrompt();
                             continue;
                         } else if (trimmedLine.equalsIgnoreCase("/quit") ||
                                    trimmedLine.equalsIgnoreCase("/exit") ||
@@ -141,6 +172,7 @@ public class ChatClient {
                             if (!audioStreamer.isGrpcStreamActive()) audioStreamer.startAudioConnection();
                             audioStreamer.startSpeakers();
                             audioStreamer.startMic();
+                            printPrompt();
                             continue;
                         } else if (trimmedLine.equalsIgnoreCase("/mic off")) {
                             audioStreamer.stopMic();
@@ -148,28 +180,70 @@ public class ChatClient {
                             if (!audioStreamer.isMicActive() && !audioStreamer.isSpeakersActive()) {
                                 audioStreamer.stopAudioConnection();
                             }
+                            printPrompt();
                             continue;
                         } else if (trimmedLine.equalsIgnoreCase("/listen on")) {
                             if (!audioStreamer.isGrpcStreamActive()) audioStreamer.startAudioConnection();
                             audioStreamer.startSpeakers();
+                            printPrompt();
                             continue;
                         } else if (trimmedLine.equalsIgnoreCase("/listen off")) {
                             audioStreamer.stopSpeakers();
                             if (!audioStreamer.isMicActive() && !audioStreamer.isSpeakersActive()) {
                                 audioStreamer.stopAudioConnection();
                             }
+                            printPrompt();
+                            continue;
+                        } else if (trimmedLine.startsWith("/upload ")) {
+                            String[] parts = trimmedLine.split(" ", 3);
+                            if (parts.length == 3) {
+                                String recipient = parts[1];
+                                String filePath = parts[2];
+                                fileTransferManager.uploadFile(recipient, filePath, roomId);
+                            } else {
+                                printMessage("Uso: /upload <usuario> <ruta_archivo>");
+                            }
+                            printPrompt();
+                            continue;
+                        } else if (trimmedLine.startsWith("/accept ")) {
+                            String[] parts = trimmedLine.split(" ", 3);
+                            if (parts.length == 3) {
+                                String transferId = parts[1];
+                                String savePath = parts[2];
+                                fileTransferManager.acceptFile(transferId, savePath, roomId);
+                            } else {
+                                printMessage("Uso: /accept <transferId> <ruta_destino>");
+                            }
+                            printPrompt();
+                            continue;
+                        } else if (trimmedLine.startsWith("/reject ")) {
+                            String[] parts = trimmedLine.split(" ");
+                            if (parts.length == 2) {
+                                String transferId = parts[1];
+                                fileTransferManager.rejectFile(transferId, roomId);
+                            } else {
+                                printMessage("Uso: /reject <transferId>");
+                            }
+                            printPrompt();
                             continue;
                         }
 
+                        // Enviar mensaje solo si no está vacío y NO empieza con /
                         if (!trimmedLine.isEmpty()) {
-                            ChatMessage chatMessage = ChatMessage.newBuilder()
-                                    .setSender(ChatClient.this.sender)
-                                    .setMessage(trimmedLine)
-                                    .setRoomId(ChatClient.this.roomId)
-                                    .setTimestamp(Instant.now().getEpochSecond())
-                                    .setTraceId(UUID.randomUUID().toString())
-                                    .build();
-                            requestObserver.onNext(chatMessage);
+                            if (trimmedLine.startsWith("/")) {
+                                printMessage("❌ Comando no reconocido: " + trimmedLine);
+                                printMessage("Escribe /help para ver los comandos disponibles.");
+                                printPrompt();
+                            } else {
+                                ChatMessage chatMessage = ChatMessage.newBuilder()
+                                        .setSender(ChatClient.this.sender)
+                                        .setMessage(trimmedLine)
+                                        .setRoomId(ChatClient.this.roomId)
+                                        .setTimestamp(Instant.now().getEpochSecond())
+                                        .setTraceId(UUID.randomUUID().toString())
+                                        .build();
+                                requestObserver.onNext(chatMessage);
+                            }
                         }
                     } else {
                         requestObserver.onCompleted();
@@ -212,7 +286,16 @@ public class ChatClient {
         System.out.println("  /mic off                       - Desactivar micrófono y altavoces");
         System.out.println("  /listen on                     - Activar solo altavoces");
         System.out.println("  /listen off                    - Desactivar altavoces");
+        System.out.println("\n📦 Comandos de Archivos:");
+        System.out.println("  /upload <usuario> <archivo>    - Enviar un archivo a un usuario");
+        System.out.println("  /accept <id> <ruta_destino>    - Aceptar transferencia de archivo");
+        System.out.println("  /reject <id>                   - Rechazar transferencia de archivo");
         System.out.println("\n═══════════════════════════════════════════════════════\n");
+    }
+
+    private static void printPrompt() {
+        System.out.print("[" + LocalDateTime.now().format(TIME_FORMATTER) + "] Tú: ");
+        System.out.flush();
     }
 
     public static void main(String[] args) {
