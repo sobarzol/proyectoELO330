@@ -12,12 +12,12 @@ RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
 WORKDIR /app
 
 # Copy the entire chat-server directory
-COPY ./chat-server ./
+COPY ./conference-server ./
 
 # Generate protobuf files (needed because .pb.go files are gitignored)
 RUN protoc --go_out=. --go_opt=paths=source_relative \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    chat/chat.proto
+    conference/conference.proto
 
 # Download dependencies and verify
 # go mod tidy regenerates go.sum if missing (needed for Coolify deployment)
