@@ -1,14 +1,23 @@
 # Build stage
 FROM golang:1.23-alpine AS builder
 
-# Install build dependencies
-RUN apk add --no-cache git
+# Install build dependencies including protoc
+RUN apk add --no-cache git protoc protobuf-dev
+
+# Install Go protobuf plugins
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 # Set working directory
 WORKDIR /app
 
 # Copy the entire chat-server directory
 COPY ./chat-server ./
+
+# Generate protobuf files (needed because .pb.go files are gitignored)
+RUN protoc --go_out=. --go_opt=paths=source_relative \
+    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+    chat/chat.proto
 
 # Download dependencies and verify
 # go mod tidy regenerates go.sum if missing (needed for Coolify deployment)
