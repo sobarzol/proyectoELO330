@@ -1,47 +1,18 @@
 # Client directories - no necesitamos copiarlos
-python-client/
-go-client/
-java-client/
-rust-client/
+python-client
+go-client
+java-client
+rust-client
 
-# Binaries
+# Binaries (solo el ejecutable compilado, no el directorio)
 chat-server/server
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test files
-*.test
-
-# Output of the go coverage tool
-*.out
 
 # Git
 .git
-.gitignore
 
 # IDE
 .vscode
 .idea
-*.swp
-*.swo
-*~
 
 # OS
 .DS_Store
-Thumbs.db
-
-# Documentation
-*.md
-INSTALL.md
-QUICKSTART.md
-README.md
-
-# Environment files
-.env
-.env.*
-
-# Makefile
-Makefile

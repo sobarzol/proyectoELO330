@@ -5,19 +5,16 @@ FROM golang:1.23-alpine AS builder
 RUN apk add --no-cache git
 
 # Set working directory
-WORKDIR /app
+WORKDIR /build
 
-# Copy go mod files from chat-server directory
-COPY chat-server/go.mod chat-server/go.sum ./
+# Copy the entire chat-server directory
+COPY ./chat-server ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy source code from chat-server directory
-COPY chat-server/ ./
-
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /build/chat-server-app ./main.go
 
 # Runtime stage
 FROM alpine:latest
@@ -25,10 +22,10 @@ FROM alpine:latest
 # Install ca-certificates for HTTPS connections
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+WORKDIR /app
 
 # Copy the binary from builder
-COPY --from=builder /app/server .
+COPY --from=builder /build/chat-server-app ./server
 
 # Expose gRPC port
 EXPOSE 50051
