@@ -10,8 +10,10 @@ WORKDIR /build
 # Copy the entire chat-server directory
 COPY ./chat-server ./
 
-# Download dependencies
+# Download dependencies and verify
+RUN go mod tidy
 RUN go mod download
+RUN go mod verify
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /build/chat-server-app .
