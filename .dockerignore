@@ -5,7 +5,7 @@ java-client
 rust-client
 
 # Binaries (solo el ejecutable compilado, no el directorio)
-chat-server/server
+conference-server/server
 
 # Git
 .git
