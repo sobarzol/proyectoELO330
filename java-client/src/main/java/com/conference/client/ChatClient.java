@@ -82,6 +82,9 @@ public class ChatClient {
                 if (data.getSender().equals(ChatClient.this.sender) && data.getPayloadCase() != ConferenceData.PayloadCase.COMMAND) {
                     return;
                 }
+
+                final boolean shouldPrintPrompt = data.getPayloadCase() != ConferenceData.PayloadCase.AUDIO_CHUNK;
+
                 switch (data.getPayloadCase()) {
                     case TEXT_MESSAGE:
                         ChatMessage chat = data.getTextMessage();
@@ -127,7 +130,7 @@ public class ChatClient {
                     default:
                         break;
                 }
-                if (connectionSuccessful.get()) {
+                if (connectionSuccessful.get() && shouldPrintPrompt) {
                     printPrompt();
                 }
             }
@@ -168,7 +171,11 @@ public class ChatClient {
             try {
                 if (scanner.hasNextLine()) {
                     String line = scanner.nextLine().trim();
-                    if (line.isEmpty()) { printPrompt(); continue; }
+                    if (line.isEmpty()) {
+                        System.out.print("\r\u001b[2K"); // Clear the line before re-printing prompt
+                        printPrompt();
+                        continue;
+                    }
                     if (line.startsWith("/")) {
                         if (handleCommand(line)) break;
                     } else {

@@ -171,12 +171,17 @@ func (s *server) JoinConference(stream pb.ConferenceService_JoinConferenceServer
 // --- Message Handling ---
 
 func (r *Room) Broadcast(msg *pb.ConferenceData, senderAddr string) {
+	log.Printf("Broadcasting message from sender with address: %s", senderAddr)
 	r.clients.Range(func(key, value interface{}) bool {
 		clientAddr := key.(string)
-		if clientAddr == senderAddr { // Don't send back to sender
+		client := value.(*Client)
+
+		if senderAddr != "" && clientAddr == senderAddr {
+			log.Printf("Skipping broadcast to sender %s (%s)", client.id, clientAddr)
 			return true
 		}
-		client := value.(*Client)
+
+		log.Printf("Sending broadcast to %s (%s)", client.id, clientAddr)
 		select {
 		case client.ch <- msg:
 		default:
