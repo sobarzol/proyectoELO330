@@ -90,7 +90,8 @@ public class ChatClient {
                         } else {
                             LocalDateTime dt = LocalDateTime.ofInstant(Instant.ofEpochSecond(chat.getTimestamp()), ZoneId.systemDefault());
                             String content = chat.getContent();
-                            if (content.startsWith("(private")) {
+                            
+                            if (content.startsWith("(private)")) {
                                 printMessage(String.format("[%s] %s", dt.format(TIME_FORMATTER), content));
                             } else {
                                 printMessage(String.format("[%s] %s: %s", dt.format(TIME_FORMATTER), data.getSender(), content));
@@ -99,8 +100,8 @@ public class ChatClient {
                         break;
                     case FILE_ANNOUNCEMENT:
                         BroadcastFileAnnouncement announce = data.getFileAnnouncement();
-                        String size = String.format("%.2f KB", (double) announce.getFileSize() / 1024.0);
-                        printMessage(String.format("📢 %s está compartiendo '%s' (%s).", data.getSender(), announce.getFilename(), size));
+                        String size = String.format("%.2f KiB", (double) announce.getFileSize() / 1024.0);
+                        printMessage(String.format("%s está compartiendo '%s' (%s).", data.getSender(), announce.getFilename(), size));
                         printMessage(String.format("   Para descargar, usa: /download %s <ruta_destino>", announce.getTransferId()));
                         fileTransferManager.registerBroadcastTransfer(announce.getTransferId(), announce.getFileSize());
                         break;
@@ -112,12 +113,12 @@ public class ChatClient {
                     case COMMAND:
                         com.conference.grpc.Command cmd = data.getCommand();
                         if (cmd.getType().equals("ERROR")) {
-                            System.out.println("\r\u001b[2K❌ Error del Servidor: " + cmd.getValue());
+                            System.out.println("\r\u001b[2K Error del Servidor: " + cmd.getValue());
                             finishLatch.countDown();
                         } else if (cmd.getType().equals("WELCOME")) {
                             connectionSuccessful.set(true);
                             System.out.print("\r\u001b[2K");
-                            System.out.println("✅ Conectado exitosamente como '" + sender + "' en sala '" + roomId + "'");
+                            System.out.println("Conectado exitosamente como '" + sender + "' en sala '" + roomId + "'");
                             System.out.println("Ya puedes chatear. Escribe /help para ver todos los comandos.");
                         } else {
                             printMessage(String.format("[SERVER] %s: %s", cmd.getType(), cmd.getValue()));
@@ -130,7 +131,7 @@ public class ChatClient {
                     printPrompt();
                 }
             }
-            @Override public void onError(Throwable t) { System.out.println("\r\u001b[2K❌ Error en la conexión: " + t.getMessage()); finishLatch.countDown(); }
+            @Override public void onError(Throwable t) { System.out.println("\r\u001b[2K Error en la conexión: " + t.getMessage()); finishLatch.countDown(); }
             @Override public void onCompleted() {
                 // If result is not already set to QUIT, it means it's a normal leave/disconnect.
                 if (sessionResult != SessionResult.QUIT_APPLICATION) {
@@ -211,7 +212,6 @@ public class ChatClient {
                 printPrompt();
                 break;
             default:
-                // For other commands, let them print their own prompts or messages
                 handleOtherCommands(command, parts);
                 break;
         }
@@ -247,7 +247,7 @@ public class ChatClient {
                 else printMessage("Uso: /reject <transferId>");
                 break;
             default:
-                printMessage("❌ Comando no reconocido: " + command);
+                printMessage("Comando no reconocido: " + command);
                 printPrompt();
                 break;
         }
@@ -260,7 +260,7 @@ public class ChatClient {
             try {
                 long fileSize = Long.parseLong(parts[4]);
                 fileTransferManager.registerPendingP2PTransfer(transferId, fileSender, fileSize);
-                printMessage("\n📦 Solicitud de archivo 1-a-1 recibida:");
+                printMessage("\nSolicitud de archivo 1-a-1 recibida:");
                 printMessage("  De: " + fileSender);
                 printMessage("  Archivo: " + filename + " (" + fileSize + " bytes)");
                 printMessage("  Para aceptar: /accept " + transferId + " <ruta_destino>");
@@ -308,20 +308,28 @@ public class ChatClient {
         String portStr = scanner.nextLine().trim();
         int port = portStr.isEmpty() ? 50051 : Integer.parseInt(portStr);
         ChatClient client = new ChatClient(host, port);
+        System.out.println("\n──────────────────────────────────────────────────");
+        System.out.println("                UNIRSE A UNA SALA");
+        System.out.println("──────────────────────────────────────────────────");
 
         while (true) {
-            System.out.println("\n──────────────────────────────────────────────────");
-            System.out.println("                UNIRSE A UNA SALA");
-            System.out.println("──────────────────────────────────────────────────");
+            
             System.out.print("\n🏠 ID de la sala (o escribe 'quit' para salir): ");
             String roomId = scanner.nextLine().trim();
             if (roomId.equalsIgnoreCase("quit")) break;
 
+            if (roomId.isEmpty()) {
+                System.err.println("❌ ¡El ID de la sala no puede estar vacíos!");
+                continue;
+            }
+
             System.out.print("👤 Tu nombre de usuario: ");
             String sender = scanner.nextLine().trim();
 
-            if (roomId.isEmpty() || sender.isEmpty()) {
-                System.err.println("❌ ¡El ID de la sala y el nombre de usuario no pueden estar vacíos!");
+            
+
+            if(sender.isEmpty()){
+                System.err.println("❌ ¡El nombre de usuario no puede estar vacíos!");
                 continue;
             }
             
